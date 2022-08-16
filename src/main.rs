@@ -1,17 +1,19 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{prelude::*, BufReader};
+use std::io::{self, prelude::*, BufReader};
+
 struct WordFreq {
     word: String,
     frequency: u128,
 }
 
 struct Node {
-    letter: Option<char>,
+    // letter: Option<char>,
     frequency: Option<u128>,
     is_last: bool,
     children: HashMap<char, Node>,
 }
+
 struct Trie {
     root: Node,
 }
@@ -20,7 +22,7 @@ impl Trie {
     fn new() -> Self {
         Self {
             root: Node {
-                letter: None,
+                // letter: None,
                 frequency: None,
                 is_last: false,
                 children: HashMap::new(),
@@ -28,10 +30,11 @@ impl Trie {
         }
     }
 }
+
 impl Node {
     fn new_branch() -> Self {
         return Self {
-            letter: None,
+            // letter: None,
             children: HashMap::new(),
             frequency: None,
             is_last: false,
@@ -47,15 +50,25 @@ trait Dictionary {
 
     fn search(&mut self, word: String) -> Option<u128>;
 
-    fn autocomplete(&self, prefix: String) -> Vec<WordFreq>;
+    fn autocomplete(&mut self, prefix: String) -> Vec<String>;
+}
+impl Trie {
+    fn dfs(&self, node: &Node, word: &String, node_letter: char, res: &mut Vec<String>) {
+        if node.is_last {
+            res.push(word.clone());
+        }
+        for child in &node.children {
+            let mut w = word.clone();
+            w.push(node_letter);
+            self.dfs(&child.1, &w, child.0.clone(), res);
+        }
+    }
 }
 impl Dictionary for Trie {
     fn build(&mut self, word_freqs: Vec<WordFreq>) {
-        println!("building");
         word_freqs
             .into_iter()
             .for_each(|w| if let Ok(()) = self.insert(w) {});
-        println!("building done");
     }
 
     fn insert(&mut self, word_freq: WordFreq) -> Result<(), ()> {
@@ -68,7 +81,6 @@ impl Dictionary for Trie {
         }
         cur.is_last = true;
         cur.frequency = Some(word_freq.frequency);
-        println!("{}", cur.frequency.unwrap());
         return Ok(());
     }
 
@@ -77,13 +89,6 @@ impl Dictionary for Trie {
     }
 
     fn search(&mut self, word: String) -> Option<u128> {
-        // cur = self.root
-        // for ch in word:
-        //     if ch not in cur.children:
-        //         return 0
-        //     cur = cur.children[ch]
-
-        // return cur.frequency if cur.frequency else 0
         let mut cur = &mut self.root;
         for ch in word.chars() {
             if !cur.children.contains_key(&ch) {
@@ -95,10 +100,21 @@ impl Dictionary for Trie {
         return cur.frequency;
     }
 
-    fn autocomplete(&self, prefix: String) -> Vec<WordFreq> {
-        todo!()
+    fn autocomplete(&mut self, prefix: String) -> Vec<String> {
+        let res = Vec::new();
+        let mut cur = &self.root;
+        for ch in prefix.chars() {
+            if !cur.children.contains_key(&ch) {
+                return res;
+            }
+            cur = cur.children.get(&ch).unwrap();
+        }
+        let res = &mut Vec::new();
+        self.dfs(cur, &prefix, prefix.chars().last().unwrap(), res);
+        return res[..3].to_owned();
     }
 }
+
 fn load_words() -> Vec<WordFreq> {
     let mut words = Vec::new();
     let file = File::open("/home/ryan/rust/trie/sampleData200k.txt").unwrap();
@@ -116,13 +132,14 @@ fn load_words() -> Vec<WordFreq> {
 
 fn main() {
     let words = load_words();
-    // for word in words {
-    //     println!("{}", word.frequency);
-    // }
     let mut trie = Trie::new();
     trie.build(words);
     trie.search(String::from("wookie"));
-    if let Some(freq) = trie.search(String::from("wookie")) {
-        print!("{}", freq);
-    }
+    let buff = &mut String::new();
+    io::stdin().read_line(buff).unwrap();
+    println!("{}", buff);
+    buff.pop();
+    trie.autocomplete(buff.to_owned())
+        .iter()
+        .for_each(|e| println!("{}", e));
 }
