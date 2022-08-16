@@ -1,3 +1,4 @@
+use crate::dictionary::{Dictionary, WordFreq};
 use std::{error::Error, io};
 
 use crossterm::{
@@ -14,6 +15,9 @@ use tui::{
     Frame, Terminal,
 };
 use unicode_width::UnicodeWidthStr;
+
+use crate::dictionary::{load_words, Trie};
+
 enum InputMode {
     Normal,
     Editing,
@@ -27,6 +31,7 @@ struct App {
     input_mode: InputMode,
     /// History of recorded messages
     messages: Vec<String>,
+    dictionary: Trie,
 }
 
 impl Default for App {
@@ -35,6 +40,7 @@ impl Default for App {
             input: String::new(),
             input_mode: InputMode::Normal,
             messages: Vec::new(),
+            dictionary: Trie::new(),
         }
     }
 }
@@ -47,7 +53,10 @@ pub fn setup_and_run() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let app = App::default();
+    let mut app = App::default();
+    let words = load_words();
+    app.dictionary.build(words);
+
     let res = run_app(&mut terminal, app);
 
     // restore terminal
@@ -66,8 +75,9 @@ pub fn setup_and_run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
+    let mut completeions = Vec::new();
     loop {
-        terminal.draw(|f| ui(f, &app))?;
+        terminal.draw(|f| ui(f, &app, &completeions))?;
 
         if let Event::Key(key) = event::read()? {
             match app.input_mode {
@@ -86,9 +96,13 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     }
                     KeyCode::Char(c) => {
                         app.input.push(c);
+                        completeions = app.dictionary.autocomplete(app.input.clone());
                     }
                     KeyCode::Backspace => {
                         app.input.pop();
+                        if !app.input.is_empty() {
+                            completeions = app.dictionary.autocomplete(app.input.clone());
+                        }
                     }
                     KeyCode::Esc => {
                         app.input_mode = InputMode::Normal;
@@ -100,7 +114,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     }
 }
 
-fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
+fn ui<B: Backend>(f: &mut Frame<B>, app: &App, completeions: &Vec<WordFreq>) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
@@ -164,15 +178,18 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         }
     }
 
-    let messages: Vec<ListItem> = app
-        .messages
+    let messages: Vec<ListItem> = completeions
         .iter()
         .enumerate()
         .map(|(i, m)| {
-            let content = vec![Spans::from(Span::raw(format!("{}: {}", i, m)))];
+            let content = vec![Spans::from(Span::raw(format!(
+                "{}: {}: {}",
+                m.frequency, i, m.word
+            )))];
             ListItem::new(content)
         })
         .collect();
+    // let
     let messages =
         List::new(messages).block(Block::default().borders(Borders::ALL).title("Messages"));
     f.render_widget(messages, chunks[2]);
