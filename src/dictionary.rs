@@ -10,7 +10,6 @@ pub struct WordFreq {
 }
 
 struct Node {
-    // letter: Option<char>,
     frequency: Option<u128>,
     is_last: bool,
     children: HashMap<char, Node>,
@@ -24,7 +23,6 @@ impl Trie {
     pub fn new() -> Self {
         Self {
             root: Node {
-                // letter: None,
                 frequency: None,
                 is_last: false,
                 children: HashMap::new(),
@@ -36,7 +34,6 @@ impl Trie {
 impl Node {
     fn new_branch() -> Self {
         return Self {
-            // letter: None,
             children: HashMap::new(),
             frequency: None,
             is_last: false,
@@ -53,15 +50,17 @@ pub trait Dictionary {
 
     fn search(&mut self, word: String) -> Option<u128>;
 
-    fn autocomplete(&mut self, prefix: String) -> Vec<WordFreq>;
+    fn autocomplete(&mut self, prefix: &String) -> Vec<WordFreq>;
 }
 
 impl Trie {
     fn dfs(&self, node: &Node, word: &String, node_letter: char, res: &mut Vec<WordFreq>) {
         if node.is_last {
+            let mut word = word.to_owned();
+            word.push(node_letter);
             res.push(WordFreq {
-                word: word.to_owned(),
-                frequency: node.frequency.expect("error unwrwaping freq"),
+                word,
+                frequency: node.frequency.unwrap(),
             });
         }
         for child in &node.children {
@@ -108,7 +107,7 @@ impl Dictionary for Trie {
         return cur.frequency;
     }
 
-    fn autocomplete(&mut self, prefix: String) -> Vec<WordFreq> {
+    fn autocomplete(&mut self, prefix: &String) -> Vec<WordFreq> {
         let res: Vec<WordFreq> = Vec::new();
         let mut cur = &self.root;
         for ch in prefix.chars() {
@@ -131,7 +130,7 @@ impl Dictionary for Trie {
 
 pub fn load_words() -> Vec<WordFreq> {
     let mut words = Vec::new();
-    let file = File::open("/home/ryan/rust/trie/sampleData200k.txt").unwrap();
+    let file = File::open("/home/ryan/rust/trie/sampleData.txt").unwrap();
     let lines = BufReader::new(file).lines();
     for line in lines {
         let line = line.unwrap();

@@ -1,5 +1,10 @@
 use crate::dictionary::{Dictionary, WordFreq};
-use std::{error::Error, io};
+use std::{
+    error::Error,
+    io,
+    sync::{Arc, Mutex},
+    thread,
+};
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -31,7 +36,7 @@ struct App {
     input_mode: InputMode,
     /// History of recorded messages
     messages: Vec<String>,
-    dictionary: Trie,
+    dictionary: Arc<Mutex<Trie>>,
 }
 
 impl Default for App {
@@ -40,7 +45,7 @@ impl Default for App {
             input: String::new(),
             input_mode: InputMode::Normal,
             messages: Vec::new(),
-            dictionary: Trie::new(),
+            dictionary: Arc::new(Mutex::new(Trie::new())),
         }
     }
 }
@@ -51,14 +56,9 @@ pub fn setup_and_run() -> Result<(), Box<dyn Error>> {
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-
     // create app and run it
-    let mut app = App::default();
-    let words = load_words();
-    app.dictionary.build(words);
-
+    let app = App::default();
     let res = run_app(&mut terminal, app);
-
     // restore terminal
     disable_raw_mode()?;
     execute!(
@@ -71,11 +71,17 @@ pub fn setup_and_run() -> Result<(), Box<dyn Error>> {
     if let Err(err) = res {
         println!("{:?}", err)
     }
-
     Ok(())
 }
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     let mut completeions = Vec::new();
+    let dictionary_mutex = app.dictionary.clone();
+
+    thread::spawn(move || {
+        let words = load_words();
+        dictionary_mutex.lock().unwrap().build(words);
+    });
+
     loop {
         terminal.draw(|f| ui(f, &app, &completeions))?;
 
@@ -96,12 +102,14 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     }
                     KeyCode::Char(c) => {
                         app.input.push(c);
-                        completeions = app.dictionary.autocomplete(app.input.clone());
+                        if let Ok(mut dict) = app.dictionary.try_lock() {
+                            completeions = dict.autocomplete(&app.input);
+                        }
                     }
                     KeyCode::Backspace => {
                         app.input.pop();
-                        if !app.input.is_empty() {
-                            completeions = app.dictionary.autocomplete(app.input.clone());
+                        if let Ok(mut dict) = app.dictionary.try_lock() && !app.input.is_empty() {
+                            completeions = dict.autocomplete(&app.input);
                         }
                     }
                     KeyCode::Esc => {
