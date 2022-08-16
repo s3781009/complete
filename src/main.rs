@@ -1,7 +1,22 @@
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use std::collections::HashMap;
+use std::error::Error;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
-
+use tui::{
+    backend::{Backend, CrosstermBackend},
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
+    text::{Span, Spans, Text},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
+    Frame, Terminal,
+};
+use unicode_width::UnicodeWidthStr;
+mod ui;
 struct WordFreq {
     word: String,
     frequency: u128,
@@ -41,6 +56,7 @@ impl Node {
         };
     }
 }
+
 trait Dictionary {
     fn build(&mut self, words: Vec<WordFreq>);
 
@@ -52,6 +68,7 @@ trait Dictionary {
 
     fn autocomplete(&mut self, prefix: String) -> Vec<String>;
 }
+
 impl Trie {
     fn dfs(&self, node: &Node, word: &String, node_letter: char, res: &mut Vec<String>) {
         if node.is_last {
@@ -64,6 +81,7 @@ impl Trie {
         }
     }
 }
+
 impl Dictionary for Trie {
     fn build(&mut self, word_freqs: Vec<WordFreq>) {
         word_freqs
@@ -130,16 +148,6 @@ fn load_words() -> Vec<WordFreq> {
     return words;
 }
 
-fn main() {
-    let words = load_words();
-    let mut trie = Trie::new();
-    trie.build(words);
-    trie.search(String::from("wookie"));
-    let buff = &mut String::new();
-    io::stdin().read_line(buff).unwrap();
-    println!("{}", buff);
-    buff.pop();
-    trie.autocomplete(buff.to_owned())
-        .iter()
-        .for_each(|e| println!("{}", e));
+fn main() -> Result<(), Box<dyn Error>> {
+    ui::setup_and_run()
 }
